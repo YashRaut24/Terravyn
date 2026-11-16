@@ -11,3 +11,11 @@ server\venv\Scripts\python.exe -m uvicorn main:app --app-dir server --reload
 ```
 
 The health endpoint is available at `http://127.0.0.1:8000/health`.
+
+To run an interactive Interviewer-only session in the terminal, configure `OPENAI_API_KEY` in `.env`, then run:
+
+```powershell
+server\venv\Scripts\python.exe -m server.interviewer_cli --role "backend intern" --difficulty medium
+```
+
+Type `/quit` to end the session.
