@@ -1,0 +1,42 @@
+{
+  "name": "Backend Intern",
+  "min_score": 1,
+  "max_score": 5,
+  "criteria": [
+    {
+      "name": "Programming fundamentals",
+      "description": "Applies basic data structures, control flow, and language fundamentals to backend tasks.",
+      "weight": 0.2
+    },
+    {
+      "name": "API and HTTP fundamentals",
+      "description": "Understands request and response behavior, common HTTP methods and status codes, and basic API design.",
+      "weight": 0.15
+    },
+    {
+      "name": "Data modeling and databases",
+      "description": "Can reason about data shape, persistence, and straightforward database queries or tradeoffs.",
+      "weight": 0.15
+    },
+    {
+      "name": "Problem solving and debugging",
+      "description": "Breaks down unfamiliar problems, investigates failures methodically, and explains a reasonable solution.",
+      "weight": 0.2
+    },
+    {
+      "name": "Testing and code quality",
+      "description": "Recognizes useful test cases and writes or describes clear, maintainable code.",
+      "weight": 0.15
+    },
+    {
+      "name": "Security and reliability basics",
+      "description": "Shows awareness of input validation, error handling, and common backend security or reliability concerns.",
+      "weight": 0.1
+    },
+    {
+      "name": "Communication and learning",
+      "description": "Communicates assumptions and reasoning clearly, responds constructively to feedback, and demonstrates curiosity.",
+      "weight": 0.05
+    }
+  ]
+}
