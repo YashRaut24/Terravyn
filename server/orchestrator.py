@@ -6,12 +6,19 @@ from .agents.interviewer import ask_question
 from .agents.technical_evaluator import TechnicalEvaluation, evaluate_answer
 from .schemas import Rubric, SharedState, TranscriptMessage
 
+WEAK_TECHNICAL_SCORE_MAX = 2
+STRONG_TECHNICAL_SCORE_MIN = 4
+STRONG_HR_AVERAGE_MIN = 4
+
 
 @dataclass(frozen=True)
 class OrchestrationResult:
     technical_evaluation: TechnicalEvaluation
     hr_evaluation: HREvaluation
-    next_question: str
+    next_question: str | None
+    report_ready: bool
+    follow_up: bool
+    difficulty_raised: bool
 
 
 def process_answer(
@@ -59,14 +66,44 @@ def process_answer(
         note for note in (state.notes.strip(), evaluation_notes) if note
     )
 
-    next_question = ask_question(state)
+    state.question_count += 1
+    if state.question_count >= state.max_questions:
+        return OrchestrationResult(
+            technical_evaluation=technical_evaluation,
+            hr_evaluation=hr_evaluation,
+            next_question=None,
+            report_ready=True,
+            follow_up=False,
+            difficulty_raised=False,
+        )
+
+    follow_up = technical_evaluation.score <= WEAK_TECHNICAL_SCORE_MAX
+    hr_average = (
+        hr_evaluation.structure_score
+        + hr_evaluation.clarity_score
+        + hr_evaluation.confidence_score
+    ) / 3
+    difficulty_raised = (
+        not follow_up
+        and technical_evaluation.score >= STRONG_TECHNICAL_SCORE_MIN
+        and hr_average >= STRONG_HR_AVERAGE_MIN
+    )
+    if difficulty_raised:
+        difficulty_levels = ("easy", "medium", "hard")
+        current_level = difficulty_levels.index(state.difficulty)
+        if current_level < len(difficulty_levels) - 1:
+            state.difficulty = difficulty_levels[current_level + 1]
+
+    next_question = ask_question(state, follow_up=follow_up)
     state.transcript.append(
         TranscriptMessage(role="interviewer", content=next_question)
     )
-    state.question_count += 1
 
     return OrchestrationResult(
         technical_evaluation=technical_evaluation,
         hr_evaluation=hr_evaluation,
         next_question=next_question,
+        report_ready=False,
+        follow_up=follow_up,
+        difficulty_raised=difficulty_raised,
     )

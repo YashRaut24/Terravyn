@@ -19,3 +19,5 @@ server\venv\Scripts\python.exe -m server.interviewer_cli --role "backend intern"
 ```
 
 Type `/quit` to end the session.
+
+The answer workflow asks a focused follow-up when the technical score is 2 or lower. A technical score of 4 or higher together with an average HR score of 4 or higher raises interview difficulty by one level. Sessions default to 10 answered questions; reaching the limit returns a report-ready result without another question.

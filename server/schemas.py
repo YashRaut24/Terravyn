@@ -17,6 +17,7 @@ class SharedState(BaseModel):
     notes: str = ""
     difficulty: Difficulty = "medium"
     question_count: int = Field(default=0, ge=0)
+    max_questions: int = Field(default=10, ge=1)
 
 
 class Session(SharedState):

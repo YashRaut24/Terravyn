@@ -64,7 +64,12 @@ class ProcessAnswerTests(unittest.TestCase):
             evaluations_finished.add("hr")
             return hr
 
-        def ask_next_question(updated_state: SharedState) -> str:
+        def ask_next_question(
+            updated_state: SharedState,
+            *,
+            follow_up: bool,
+        ) -> str:
+            self.assertFalse(follow_up)
             self.assertEqual(evaluations_finished, {"technical", "hr"})
             self.assertIn("Existing interview context.", updated_state.notes)
             self.assertIn("resource routing", updated_state.notes)
@@ -112,7 +117,102 @@ class ProcessAnswerTests(unittest.TestCase):
                 ("interviewer", "How would you test this endpoint?"),
             ],
         )
-        ask_question.assert_called_once_with(state)
+        ask_question.assert_called_once_with(state, follow_up=False)
+
+    def test_weak_technical_score_routes_to_follow_up(self) -> None:
+        state = make_state()
+        technical = TechnicalEvaluation(
+            score=2,
+            missed_points=["Did not explain status codes."],
+            ideal_answer="A 404 indicates the resource was not found.",
+        )
+        hr = HREvaluation(
+            structure_score=5,
+            clarity_score=5,
+            confidence_score=5,
+            feedback="Clear answer.",
+        )
+        with (
+            patch.object(orchestrator, "evaluate_answer", return_value=technical),
+            patch.object(orchestrator, "evaluate_communication", return_value=hr),
+            patch.object(
+                orchestrator,
+                "ask_question",
+                return_value="Can you explain a 404 response?",
+            ) as ask_question,
+        ):
+            result = orchestrator.process_answer(
+                state,
+                "What does HTTP 404 mean?",
+                "I am not sure.",
+                make_rubric(),
+            )
+
+        self.assertTrue(result.follow_up)
+        self.assertFalse(result.difficulty_raised)
+        self.assertEqual(state.difficulty, "medium")
+        ask_question.assert_called_once_with(state, follow_up=True)
+
+    def test_two_strong_evaluations_raise_difficulty_one_level(self) -> None:
+        state = make_state()
+        state.difficulty = "easy"
+        technical = TechnicalEvaluation(
+            score=4,
+            missed_points=[],
+            ideal_answer="A 404 indicates the resource was not found.",
+        )
+        hr = HREvaluation(
+            structure_score=4,
+            clarity_score=5,
+            confidence_score=4,
+            feedback="Well explained.",
+        )
+        with (
+            patch.object(orchestrator, "evaluate_answer", return_value=technical),
+            patch.object(orchestrator, "evaluate_communication", return_value=hr),
+            patch.object(orchestrator, "ask_question", return_value="Next?"),
+        ):
+            result = orchestrator.process_answer(
+                state,
+                "What does HTTP 404 mean?",
+                "The resource was not found.",
+                make_rubric(),
+            )
+
+        self.assertTrue(result.difficulty_raised)
+        self.assertFalse(result.follow_up)
+        self.assertEqual(state.difficulty, "medium")
+
+    def test_question_limit_returns_report_ready_without_next_question(self) -> None:
+        state = make_state()
+        state.max_questions = 1
+        technical = TechnicalEvaluation(
+            score=4,
+            missed_points=[],
+            ideal_answer="A 404 indicates the resource was not found.",
+        )
+        hr = HREvaluation(
+            structure_score=4,
+            clarity_score=4,
+            confidence_score=4,
+            feedback="Clear answer.",
+        )
+        with (
+            patch.object(orchestrator, "evaluate_answer", return_value=technical),
+            patch.object(orchestrator, "evaluate_communication", return_value=hr),
+            patch.object(orchestrator, "ask_question") as ask_question,
+        ):
+            result = orchestrator.process_answer(
+                state,
+                "What does HTTP 404 mean?",
+                "The resource was not found.",
+                make_rubric(),
+            )
+
+        self.assertTrue(result.report_ready)
+        self.assertIsNone(result.next_question)
+        self.assertEqual(state.question_count, 1)
+        ask_question.assert_not_called()
 
     def test_rejects_state_not_ending_with_current_question(self) -> None:
         state = make_state()
