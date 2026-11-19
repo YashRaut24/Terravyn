@@ -14,6 +14,7 @@ class TranscriptMessage(BaseModel):
 class SharedState(BaseModel):
     role: str = Field(min_length=1)
     transcript: list[TranscriptMessage] = Field(default_factory=list)
+    asked_topics: list[str] = Field(default_factory=list)
     notes: str = ""
     difficulty: Difficulty = "medium"
     question_count: int = Field(default=0, ge=0)

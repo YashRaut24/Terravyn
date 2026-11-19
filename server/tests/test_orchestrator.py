@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from server import orchestrator
 from server.agents.hr_agent import HREvaluation
+from server.agents.interviewer import InterviewQuestion
 from server.agents.technical_evaluator import TechnicalEvaluation
 from server.schemas import Rubric, SharedState, TranscriptMessage
 
@@ -18,7 +19,17 @@ def make_rubric() -> Rubric:
                 "name": "API fundamentals",
                 "description": "Understands HTTP and APIs.",
                 "weight": 1.0,
-            }
+            },
+            {
+                "name": "Testing and code quality",
+                "description": "Writes useful tests and maintainable code.",
+                "weight": 0.0,
+            },
+            {
+                "name": "Data modeling and databases",
+                "description": "Understands data persistence.",
+                "weight": 0.0,
+            },
         ],
     )
 
@@ -26,6 +37,7 @@ def make_rubric() -> Rubric:
 def make_state() -> SharedState:
     return SharedState(
         role="backend intern",
+        asked_topics=["API fundamentals"],
         notes="Existing interview context.",
         transcript=[
             TranscriptMessage(
@@ -66,11 +78,14 @@ class ProcessAnswerTests(unittest.TestCase):
 
         def ask_next_question(
             updated_state: SharedState,
+            rubric: Rubric,
             *,
             follow_up: bool,
-        ) -> str:
+        ) -> InterviewQuestion:
             self.assertFalse(follow_up)
+            self.assertEqual(rubric.name, "Backend Intern")
             self.assertEqual(evaluations_finished, {"technical", "hr"})
+            self.assertIn("API fundamentals", updated_state.asked_topics)
             self.assertIn("Existing interview context.", updated_state.notes)
             self.assertIn("resource routing", updated_state.notes)
             self.assertIn("confidence 3/5", updated_state.notes)
@@ -79,7 +94,10 @@ class ProcessAnswerTests(unittest.TestCase):
                 updated_state.transcript[-1].content,
                 "The resource was not found.",
             )
-            return "How would you test this endpoint?"
+            return InterviewQuestion(
+                question="How would you test this endpoint?",
+                topic="Testing and code quality",
+            )
 
         with (
             patch.object(
@@ -110,6 +128,10 @@ class ProcessAnswerTests(unittest.TestCase):
         self.assertEqual(result.next_question, "How would you test this endpoint?")
         self.assertEqual(state.question_count, 1)
         self.assertEqual(
+            state.asked_topics,
+            ["API fundamentals", "Testing and code quality"],
+        )
+        self.assertEqual(
             [(message.role, message.content) for message in state.transcript],
             [
                 ("interviewer", "What does HTTP 404 mean?"),
@@ -117,7 +139,7 @@ class ProcessAnswerTests(unittest.TestCase):
                 ("interviewer", "How would you test this endpoint?"),
             ],
         )
-        ask_question.assert_called_once_with(state, follow_up=False)
+        ask_question.assert_called_once_with(state, rubric, follow_up=False)
 
     def test_weak_technical_score_routes_to_follow_up(self) -> None:
         state = make_state()
@@ -138,7 +160,10 @@ class ProcessAnswerTests(unittest.TestCase):
             patch.object(
                 orchestrator,
                 "ask_question",
-                return_value="Can you explain a 404 response?",
+                return_value=InterviewQuestion(
+                    question="Can you explain a 404 response?",
+                    topic="API fundamentals",
+                ),
             ) as ask_question,
         ):
             result = orchestrator.process_answer(
@@ -151,7 +176,11 @@ class ProcessAnswerTests(unittest.TestCase):
         self.assertTrue(result.follow_up)
         self.assertFalse(result.difficulty_raised)
         self.assertEqual(state.difficulty, "medium")
-        ask_question.assert_called_once_with(state, follow_up=True)
+        ask_question.assert_called_once_with(
+            state,
+            make_rubric(),
+            follow_up=True,
+        )
 
     def test_two_strong_evaluations_raise_difficulty_one_level(self) -> None:
         state = make_state()
@@ -170,7 +199,14 @@ class ProcessAnswerTests(unittest.TestCase):
         with (
             patch.object(orchestrator, "evaluate_answer", return_value=technical),
             patch.object(orchestrator, "evaluate_communication", return_value=hr),
-            patch.object(orchestrator, "ask_question", return_value="Next?"),
+            patch.object(
+                orchestrator,
+                "ask_question",
+                return_value=InterviewQuestion(
+                    question="Next?",
+                    topic="Data modeling and databases",
+                ),
+            ),
         ):
             result = orchestrator.process_answer(
                 state,

@@ -94,7 +94,10 @@ def process_answer(
         if current_level < len(difficulty_levels) - 1:
             state.difficulty = difficulty_levels[current_level + 1]
 
-    next_question = ask_question(state, follow_up=follow_up)
+    interviewer_result = ask_question(state, rubric, follow_up=follow_up)
+    next_question = interviewer_result.question
+    if interviewer_result.topic not in state.asked_topics:
+        state.asked_topics.append(interviewer_result.topic)
     state.transcript.append(
         TranscriptMessage(role="interviewer", content=next_question)
     )
